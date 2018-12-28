@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<modification>
+    <id>Integration Mautic x Opencart</id>
+    <version>1.0</version>
+    <vqmver>2.6.1</vqmver>
+    <author>Herman Monteiro - herman@agenciaaeros.com</author>
+
+    <!-- Inicio: catalog/controller/account/register.php -->
+    <file name="catalog/controller/account/register.php">
+        <operation>
+            <search position="before"><![CDATA[class ControllerAccountRegister extends Controller {]]></search>
+            <add><![CDATA[
+                    // Bootup the Composer autoloader
+                    include DIR_COMPOSER . 'autoload.php';
+                    use Mautic\MauticApi;
+                    use Mautic\Auth\ApiAuth;
+             ]]></add>
+        </operation>
+        <operation>
+            <search position="after"><![CDATA[$this->model_account_customer->addCustomer($this->request->post);]]></search>
+            <add><![CDATA[
+            $this->load->model('module/apimautic');
+            $DataApi = $this->model_module_apimautic->getData();
+            if($DataApi[0]['id']){
+                $this->SetLeadMautic($DataApi, $this->request->post['firstname'], $this->request->post['lastname'], $this->request->post['email']);
+            }
+            ]]></add>
+        </operation>
+        <operation>
+            <search position="after" offset="1"><![CDATA[$this->response->setOutput(json_encode($json));]]></search>
+            <add><![CDATA[public function SetLeadMautic($DataApi, $FirstName, $LastName, $Email){
+
+        $settings = array(
+            'baseUrl' => $DataApi[0]['base_url'],
+            'clientKey' => $DataApi[0]['public_key'],
+            'clientSecret' => $DataApi[0]['secret_key'],
+            'callback' => $DataApi[0]['callback'],
+            'version' => 'OAuth1a',
+            'accessToken' => $DataApi[0]['access_token'],
+            'accessTokenSecret' => $DataApi[0]['access_token_secret'],
+            'accessTokenExpires' => $DataApi[0]['expires'],
+        );
+
+        //Initializes AUTH object
+        $initAuth   = new ApiAuth();
+        $auth       = $initAuth->newAuth($settings);
+        $apiUrl     = $settings['baseUrl'];
+        $api        = new MauticApi();
+        $contactApi = $api->newApi("contacts", $auth, $apiUrl);
+
+        $data = array(
+            'firstname' => $FirstName,
+            'lastname'  => $LastName,
+            'email'     => $Email,
+            'tags'     => 'FromAPi',
+            'points'     => '1',
+            'ipAddress' => $_SERVER['REMOTE_ADDR']
+        );
+
+        $contactApi->create($data);
+    }
+        ]]></add>
+        </operation>
+    </file>
+    <!-- Fim: catalog/controller/account/register.php -->
+    <!-- Inicio: catalog/controller/common/home.php -->
+    <file name="catalog/controller/common/home.php">
+        <operation>
+            <search position="before"><![CDATA[class ControllerCommonHome extends Controller {]]></search>
+            <add><![CDATA[
+include DIR_COMPOSER . 'autoload.php';
+use Mautic\Auth\ApiAuth;
+             ]]></add>
+        </operation>
+        <operation>
+            <search position="after"><![CDATA[$this->response->setOutput($this->render());]]></search>
+            <add><![CDATA[if (isset($this->request->get['oauth_token']) && isset($this->request->get['oauth_verifier'])){
+            $this->UpdateApiMautic($this->request->get['oauth_token'],$this->request->get['oauth_verifier']);}]]></add>
+        </operation>
+        <operation>
+            <search position="after" offset="3"><![CDATA[$this->response->setOutput($this->render());]]></search>
+            <add><![CDATA[protected function UpdateApiMautic($OauthToken, $OauthVerifier) {
+
+        $settings = array(
+            'baseUrl' => $this->session->data['ApimauticBaseUrl'],
+            'clientKey' => $this->session->data['ApimauticPublicKey'],
+            'clientSecret' => $this->session->data['ApimauticSecretKey'],
+            'callback' => $this->session->data['ApimauticCallback'],
+            'version' => 'OAuth1a'
+        );
+
+        //Initializes AUTH object
+        $initAuth = new ApiAuth();
+        $auth = $initAuth->newAuth($settings);
+
+        try {
+            if ($auth->validateAccessToken()) {
+
+                if ($auth->accessTokenUpdated()) {
+                    $accessTokenData = $auth->getAccessTokenData();
+                    $accessTokenData["oauth_token"] = $OauthToken;
+                    $accessTokenData["oauth_verifier"] = $OauthVerifier;
+
+                        //        Saves the new access keys in the database
+                    $this->load->model('module/apimautic');
+                    $this->model_module_apimautic->ExeUpdate($this->session->data['ApiIdMautic'], $accessTokenData);
+
+
+                    //    Success message
+                    $this->session->data['MauticValidate'] = $this->language->get('text_authorized');
+                } else {
+                    // Displays informational message that this application is already authorized.
+                    $this->session->data['ErrorMautic'] = $this->language->get('text_authorized_duplicate');
+                }
+            }
+        } catch (Exception $e) {
+            // Do Error handling
+            $this->session->data['ErrorMautic'] = $this->language->get('error_exception_mautic');
+        }
+//        Redirects to module page and deletes session
+        $UrlRedirect = $this->session->data['PageModule'];
+        unset($this->session->data['PageModule']);
+        $this->redirect($UrlRedirect);
+    }
+             ]]></add>
+        </operation>
+    </file>
+    <!-- Fim: catalog/controller/common/home.php -->
+</modification>

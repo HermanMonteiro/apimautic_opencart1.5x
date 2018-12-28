@@ -1,0 +1,20 @@
+{
+  "name": "hermanmonteiro/apimautic",
+  "description": "This is a library that uses composer as the basics integration of OpenCart x Mautic",
+  "type": "library",
+  "license": "MIT",
+  "author": [
+    {
+      "name": "Herman Monteiro",
+      "email": "herman@agenciaaeros.com",
+      "homepage": "https://www.agenciaaeros.com",
+      "role": "CEO and Founder / Developer"
+    }
+  ],
+  "require": {
+        "mautic/api-library": "^2.12"
+    },
+  "config": {
+    "vendor-dir": "lib_ext"
+  }
+}
